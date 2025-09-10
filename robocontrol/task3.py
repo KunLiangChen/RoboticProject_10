@@ -1,17 +1,17 @@
 import time
 import cv2
 import numpy as np
-from ultralytics import YOLO  # 用于加载和运行YOLOv8模型
+from ultralytics import YOLO  # 用于加载和运行YOLOv8 模型
 import robomaster
 from robomaster import robot
 
 # --- 配置 ---
 # YOLOv8 模型路径
-MODEL_PATH = "YOUR_MODEL_PATH.pt"  # <--- 请修改为你的模型文件路径
-CONFIDENCE_THRESHOLD = 0.5  # 检测置信度阈值
-ALIGNMENT_TOLERANCE = 20  # 对准容差 (像素)
-MOVE_SPEED = 0.1  # 前进速度 (m/s)
-ROTATE_SPEED_P = 0.005  # 旋转速度比例系数
+MODEL_PATH = "./model/best.pt"  # <--- 请修改为你的模型文件路径
+CONFIDENCE_THRESHOLD = 0.6  # 检测置信度阈值
+ALIGNMENT_TOLERANCE = 50  # 对准容差 (像素)
+MOVE_SPEED = 0.25  # 前进速度 (m/s)
+ROTATE_SPEED_P = 0.05  # 旋转速度比例系数
 DISTANCE_THRESHOLD = 25  # 抓取距离阈值 (cm)
 DISTANCE_SENSOR_INDEX = 3  # 测距仪连接的传感器板索引 (根据实际情况调整)
 
@@ -39,7 +39,7 @@ def distance_callback(adapter_info):
         sensor_data = adapter_info[DISTANCE_SENSOR_INDEX]
         # 如果 sensor_data 本身是列表，可能需要再取一个索引，比如 [0] 或 [3]
         # *** 需要根据你的传感器实际输出调整这一行 ***
-        current_distance = sensor_data[0]  # <--- 请根据实际情况调整索引
+        current_distance = sensor_data  # <--- 请根据实际情况调整索引
         print(f"Distance: {current_distance} cm")
     except (IndexError, TypeError) as e:
         print(f"Error reading distance data: {e}")
@@ -67,7 +67,7 @@ def main():
     print("Initializing robot...")
     ep_robot = robot.Robot()
     try:
-        ep_robot.initialize(conn_type="sta")  # 或 "ap" 根据你的连接方式
+        ep_robot.initialize(conn_type="ap")  # 或 "ap" 根据你的连接方式
         print("Robot initialized.")
     except Exception as e:
         print(f"Failed to initialize robot: {e}")
@@ -119,7 +119,7 @@ def main():
                     conf = float(boxes.conf[0].cpu().numpy())  # 获取置信度
 
                     # 检查是否检测到积木
-                    if cls == 0 and conf >= CONFIDENCE_THRESHOLD:  # names: ['block'] -> index 0
+                    if (cls == 0 or cls == 1) and conf >= CONFIDENCE_THRESHOLD:  # names: ['block'] -> index 0
                         x1, y1, x2, y2 = box
                         # 计算检测框中心点
                         center_x = (x1 + x2) / 2
@@ -147,7 +147,7 @@ def main():
                             else:
                                 # 根据误差比例控制旋转速度 (简化版P控制)
                                 # 误差为正，目标在右，需要向左转 (z为正)
-                                z_speed = -error_x * ROTATE_SPEED_P
+                                z_speed = error_x * ROTATE_SPEED_P
                                 # 限制最大旋转速度
                                 z_speed = np.clip(z_speed, -30, 30)
                                 print(f"Rotating with speed Z: {z_speed:.2f}")
@@ -169,7 +169,7 @@ def main():
 
                         # 向前移动并检查距离
                         print("Moving forward...")
-                        ep_chassis.drive_speed(x=MOVE_SPEED, y=0, z=0, timeout=0.1)  # 开始前进
+                        ep_chassis.drive_speed(x=MOVE_SPEED, y=0, z=0, timeout=0)  # 开始前进
 
                         # 持续检查距离直到达到阈值或循环超时
                         move_start_time = time.time()
@@ -188,7 +188,7 @@ def main():
                                 print(f"Target distance reached: {current_distance} cm. Stopping.")
                                 ep_chassis.drive_speed(x=0, y=0, z=0, timeout=0.1)  # 停止移动
                                 break
-                            elif time.time() - move_start_time > 10:  # 超时保护，防止无限移动
+                            elif time.time() - move_start_time > 10000:  # 超时保护，防止无限移动
                                 print("Move timeout. Stopping.")
                                 ep_chassis.drive_speed(x=0, y=0, z=0, timeout=0.1)
                                 break
