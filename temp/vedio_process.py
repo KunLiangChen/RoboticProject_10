@@ -2,7 +2,7 @@ import cv2
 import time
 from ultralytics import YOLO
 
-model = YOLO("yolo11x.pt")
+model = YOLO("../yolo11x.pt")
 
 def predict(chosen_model, img, classes=[], conf=0.5):
     if classes:
